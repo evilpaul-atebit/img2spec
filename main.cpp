@@ -1605,7 +1605,7 @@ void gen_attr_bitm()
 
 }
 
-int main(int, char**)
+int main(int argc, char** argv)
 {
 
 	// Setup SDL
@@ -1672,6 +1672,13 @@ int main(int, char**)
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+
+    // Load an image from the command line?
+    if (argc == 2)
+    {
+        loadImg(argv[1]);
+    }
 
 
     // Main loop
