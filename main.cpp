@@ -1314,60 +1314,63 @@ void addModifier(Modifier *aNewModifier)
 }
 
 
-void loadimg()
+void loadImg(const char* szFileName)
 {
-	OPENFILENAMEA ofn;
-	char szFileName[1024] = "";
+	int x, y, n;
+	unsigned int *data = (unsigned int*)stbi_load(szFileName, &x, &y, &n, 4);
 
-	ZeroMemory(&ofn, sizeof(ofn));
-
-	ofn.lStructSize = sizeof(ofn);
-	ofn.hwndOwner = 0;
-	ofn.lpstrFilter =
-		"All supported types\0*.png;*.jpg;*.jpeg;*.tga;*.bmp;*.psd;*.gif;*.hdr;*.pic;*.pnm\0"
-		"PNG (*.png)\0*.png\0"
-		"JPG (*.jpg)\0*.jpg;*.jpeg\0"
-		"TGA (*.tga)\0*.tga\0"
-		"BMP (*.bmp)\0*.bmp\0"
-		"PSD (*.psd)\0*.psd\0"
-		"GIF (*.gif)\0*.gif\0"
-		"HDR (*.hdr)\0*.hdr\0"
-		"PIC (*.pic)\0*.pic\0"
-		"PNM (*.pnm)\0*.pnm\0"
-		"All Files (*.*)\0*.*\0\0";
-
-	ofn.nMaxFile = 1024;
-
-	ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
-	ofn.lpstrFile = szFileName;
-
-	ofn.lpstrTitle = "Load image";
-
-
-	FILE * f = NULL;
-
-	if (GetOpenFileNameA(&ofn))
+	int i, j;
+	for (i = 0; i < 192; i++)
 	{
-		int x, y, n;
-		unsigned int *data = (unsigned int*)stbi_load(szFileName, &x, &y, &n, 4);
-
-		int i, j;
-		for (i = 0; i < 192; i++)
+		for (j = 0; j < 256; j++)
 		{
-			for (j = 0; j < 256; j++)
-			{
-				int pix = 0;
-				if (j < x && i < y)
-					pix = data[i * x + j] | 0xff000000;
-				gBitmapOrig[i * 256 + j] = pix;
-			}
+			int pix = 0;
+			if (j < x && i < y)
+				pix = data[i * x + j] | 0xff000000;
+			gBitmapOrig[i * 256 + j] = pix;
 		}
-
-		stbi_image_free(data);
-
-		glBindTexture(GL_TEXTURE_2D, gTextureOrig);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 192, 0, GL_RGBA, GL_UNSIGNED_BYTE, (GLvoid*)gBitmapOrig);
 	}
+
+	stbi_image_free(data);
+
+	glBindTexture(GL_TEXTURE_2D, gTextureOrig);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 192, 0, GL_RGBA, GL_UNSIGNED_BYTE, (GLvoid*)gBitmapOrig);
+}
+
+
+void chooseLoadImg()
+{
+    OPENFILENAMEA ofn;
+    char szFileName[1024] = "";
+
+    ZeroMemory(&ofn, sizeof(ofn));
+
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = 0;
+    ofn.lpstrFilter =
+        "All supported types\0*.png;*.jpg;*.jpeg;*.tga;*.bmp;*.psd;*.gif;*.hdr;*.pic;*.pnm\0"
+        "PNG (*.png)\0*.png\0"
+        "JPG (*.jpg)\0*.jpg;*.jpeg\0"
+        "TGA (*.tga)\0*.tga\0"
+        "BMP (*.bmp)\0*.bmp\0"
+        "PSD (*.psd)\0*.psd\0"
+        "GIF (*.gif)\0*.gif\0"
+        "HDR (*.hdr)\0*.hdr\0"
+        "PIC (*.pic)\0*.pic\0"
+        "PNM (*.pnm)\0*.pnm\0"
+        "All Files (*.*)\0*.*\0\0";
+
+    ofn.nMaxFile = 1024;
+
+    ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+    ofn.lpstrFile = szFileName;
+
+    ofn.lpstrTitle = "Load image";
+
+    if (GetOpenFileNameA(&ofn))
+    {
+        loadImg(szFileName);
+    }
 }
 
 
@@ -1692,7 +1695,7 @@ int main(int, char**)
 		{
 			if (ImGui::BeginMenu("File"))
 			{
-				if (ImGui::MenuItem("Load image")) { loadimg(); }
+                if (ImGui::MenuItem("Load image")) { chooseLoadImg(); }
 				ImGui::Separator();
 				if (ImGui::MenuItem("Save .png")) { savepng(); }
 				if (ImGui::MenuItem("Save .scr")) { savescr(); }
