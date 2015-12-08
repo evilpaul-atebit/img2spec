@@ -88,6 +88,11 @@ int gOptScreenOrder = 1;
 // Texture handles
 GLuint gTextureOrig, gTextureProc, gTextureSpec, gTextureAttr, gTextureBitm; 
 
+// Source image
+unsigned int* gSourceImageData = NULL;
+unsigned int gSourceImageWidth = 0;
+unsigned int gSourceImageHeight = 0;
+
 // Bitmaps for the textures
 unsigned int gBitmapOrig[256 * 192];
 unsigned int gBitmapProc[256 * 192];
@@ -1314,27 +1319,40 @@ void addModifier(Modifier *aNewModifier)
 }
 
 
+void copySourceToOrig()
+{
+    for (unsigned int x = 0; x < 256; x++)
+    {
+        for (unsigned int y = 0; y < 192; y++)
+        {
+            int pix = 0;
+            if (x < gSourceImageWidth && y < gSourceImageHeight)
+                pix = gSourceImageData[x + y * gSourceImageWidth] | 0xff000000;
+            else
+                pix = 0xffffffff;
+            gBitmapOrig[x + y * 256] = pix;
+        }
+    }
+    glBindTexture(GL_TEXTURE_2D, gTextureOrig);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 192, 0, GL_RGBA, GL_UNSIGNED_BYTE, (GLvoid*)gBitmapOrig);
+}
+
+
 void loadImg(const char* szFileName)
 {
-	int x, y, n;
-	unsigned int *data = (unsigned int*)stbi_load(szFileName, &x, &y, &n, 4);
+    int width, height, n;
+    unsigned int *data = (unsigned int*)stbi_load(szFileName, &width, &height, &n, 4);
+    if (data)
+    {
+        delete[] gSourceImageData;
+        gSourceImageData = new unsigned int[width * height];
+        gSourceImageWidth = width;
+        gSourceImageHeight = height;
+        memcpy(gSourceImageData, data, width * height * sizeof(unsigned int));
+        stbi_image_free(data);
+    }
 
-	int i, j;
-	for (i = 0; i < 192; i++)
-	{
-		for (j = 0; j < 256; j++)
-		{
-			int pix = 0;
-			if (j < x && i < y)
-				pix = data[i * x + j] | 0xff000000;
-			gBitmapOrig[i * 256 + j] = pix;
-		}
-	}
-
-	stbi_image_free(data);
-
-	glBindTexture(GL_TEXTURE_2D, gTextureOrig);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 192, 0, GL_RGBA, GL_UNSIGNED_BYTE, (GLvoid*)gBitmapOrig);
+    copySourceToOrig();
 }
 
 
