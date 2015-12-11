@@ -70,6 +70,7 @@ int float_to_color(float aR, float aG, float aB);
 // used to avoid id collisions in ImGui
 int gUniqueValueCounter = 0;
 
+bool gWindowScalePosition = true;
 bool gWindowZoomedOutput = false;
 bool gWindowAttribBitmap = false;
 bool gWindowHistograms = false;
@@ -92,6 +93,11 @@ GLuint gTextureOrig, gTextureProc, gTextureSpec, gTextureAttr, gTextureBitm;
 unsigned int* gSourceImageData = NULL;
 unsigned int gSourceImageWidth = 0;
 unsigned int gSourceImageHeight = 0;
+float gSourceImageAdjustedWidth = 1;
+float gSourceImageAdjustedHeight = 1;
+bool gSourceImageMatchSourceAspect = false;
+int gSourceImagePositionX = 0;
+int gSourceImagePositionY = 0;
 
 // Bitmaps for the textures
 unsigned int gBitmapOrig[256 * 192];
@@ -1321,18 +1327,35 @@ void addModifier(Modifier *aNewModifier)
 
 void copySourceToOrig()
 {
-    for (unsigned int x = 0; x < 256; x++)
+    for (int y = 0; y < 192; y++)
     {
-        for (unsigned int y = 0; y < 192; y++)
+        float srcY = (((float(y) / 191.0f) * 2.0f) - 1.0f);
+        srcY -= float(gSourceImagePositionY) / 192.0f * 2.0f;
+        srcY *= 192.0f / float(gSourceImageAdjustedHeight);
+        srcY = (srcY + 1.0f) / 2.0f * float(gSourceImageHeight);
+
+        for (int x = 0; x < 256; x++)
         {
+            float srcX = (((float(x) / 255.0f) * 2.0f) - 1.0f);
+            srcX -= float(gSourceImagePositionX) / 256.0f * 2.0f;
+            srcX *= 256.0f / float(gSourceImageAdjustedWidth);
+            srcX = (srcX + 1.0f) / 2.0f * float(gSourceImageWidth);
+
             int pix = 0;
-            if (x < gSourceImageWidth && y < gSourceImageHeight)
-                pix = gSourceImageData[x + y * gSourceImageWidth] | 0xff000000;
+            if (srcX >= 0 && srcX < int(gSourceImageWidth) &&
+                srcY >= 0 && srcY < int(gSourceImageHeight))
+            {
+                pix = gSourceImageData[int(srcX) + int(srcY) * gSourceImageWidth] | 0xff000000;
+            }
             else
+            {
                 pix = 0xffffffff;
+            }
+
             gBitmapOrig[x + y * 256] = pix;
         }
     }
+
     glBindTexture(GL_TEXTURE_2D, gTextureOrig);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 192, 0, GL_RGBA, GL_UNSIGNED_BYTE, (GLvoid*)gBitmapOrig);
 }
@@ -1342,15 +1365,24 @@ void loadImg(const char* szFileName)
 {
     int width, height, n;
     unsigned int *data = (unsigned int*)stbi_load(szFileName, &width, &height, &n, 4);
+    delete[] gSourceImageData;
     if (data)
     {
-        delete[] gSourceImageData;
         gSourceImageData = new unsigned int[width * height];
         gSourceImageWidth = width;
         gSourceImageHeight = height;
         memcpy(gSourceImageData, data, width * height * sizeof(unsigned int));
         stbi_image_free(data);
     }
+    else
+    {
+        gSourceImageData = NULL;
+        gSourceImageWidth = 0;
+        gSourceImageHeight = 0;
+    }
+
+    gSourceImageAdjustedWidth = 256;
+    gSourceImageAdjustedHeight = 192;
 
     copySourceToOrig();
 }
@@ -1734,7 +1766,8 @@ int main(int argc, char** argv)
 				if (ImGui::MenuItem("Histogram")) { gWindowHistograms = !gWindowHistograms; }
 				if (ImGui::MenuItem("Modifier palette")) { gWindowModifierPalette = !gWindowModifierPalette; }
 				if (ImGui::MenuItem("Zoomed output")) { gWindowZoomedOutput = !gWindowZoomedOutput;  }
-				if (ImGui::MenuItem("Options")) { gWindowOptions = !gWindowOptions; }
+                if (ImGui::MenuItem("Scale and position")) { gWindowScalePosition = !gWindowScalePosition; }
+                if (ImGui::MenuItem("Options")) { gWindowOptions = !gWindowOptions; }
 				ImGui::EndMenu();
 			}
 			if (ImGui::BeginMenu("Modifier"))
@@ -1949,6 +1982,100 @@ int main(int argc, char** argv)
 			}
 			ImGui::End();
 		}
+
+        if (gWindowScalePosition)
+        {
+            if (ImGui::Begin("Scale and position", &gWindowScalePosition, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize))
+            {
+                bool regenNeeded = false;
+
+                if (ImGui::SliderFloat("##Adjusted width", &gSourceImageAdjustedWidth, 1, gSourceImageWidth))
+                {
+                    if (gSourceImageMatchSourceAspect)
+                    {
+                        const float aspect = float(gSourceImageWidth) / float(gSourceImageHeight);
+                        gSourceImageAdjustedHeight = gSourceImageAdjustedWidth / aspect;
+                    }
+                    regenNeeded = true;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Fit##Width"))
+                {
+                    gSourceImageAdjustedWidth = 256;
+                    if (gSourceImageMatchSourceAspect)
+                    {
+                        const float aspect = float(gSourceImageWidth) / float(gSourceImageHeight);
+                        gSourceImageAdjustedHeight = gSourceImageAdjustedWidth / aspect;
+                    }
+                    regenNeeded = true;
+                }
+                ImGui::SameLine(); ImGui::Text("Width");
+
+                if (ImGui::SliderFloat("##Adjusted height", &gSourceImageAdjustedHeight, 1, gSourceImageWidth))
+                {
+                    if (gSourceImageMatchSourceAspect)
+                    {
+                        const float aspect = float(gSourceImageWidth) / float(gSourceImageHeight);
+                        gSourceImageAdjustedWidth = gSourceImageAdjustedHeight * aspect;
+                    }
+                    regenNeeded = true;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Fit##Height"))
+                {
+                    gSourceImageAdjustedHeight= 192;
+                    if (gSourceImageMatchSourceAspect)
+                    {
+                        const float aspect = float(gSourceImageWidth) / float(gSourceImageHeight);
+                        gSourceImageAdjustedWidth = gSourceImageAdjustedHeight * aspect;
+                    }
+                    regenNeeded = true;
+                }
+                ImGui::SameLine(); ImGui::Text("Height");
+
+                if (ImGui::Checkbox("Lock to source aspect", &gSourceImageMatchSourceAspect))
+                {
+                    if (gSourceImageMatchSourceAspect)
+                    {
+                        const float aspect = float(gSourceImageWidth) / float(gSourceImageHeight);
+                        gSourceImageAdjustedHeight = gSourceImageAdjustedWidth / aspect;
+                        regenNeeded = true;
+                    }
+                }
+
+                ImGui::Separator();
+
+                if (ImGui::SliderInt("##Position X", &gSourceImagePositionX, -512, 512))
+                {
+                    regenNeeded = true;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Reset##Position X"))
+                {
+                    gSourceImagePositionX = 0;
+                    regenNeeded = true;
+                }
+                ImGui::SameLine(); ImGui::Text("Position X");
+
+                if (ImGui::SliderInt("##Position Y", &gSourceImagePositionY, -512, 512))
+                {
+                    regenNeeded = true;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Reset##Position Y"))
+                {
+                    gSourceImagePositionY = 0;
+                    regenNeeded = true;
+                }
+                ImGui::SameLine(); ImGui::Text("Position Y");
+
+                if (regenNeeded)
+                {
+                    copySourceToOrig();
+                }
+            }
+            ImGui::End();
+        }
 
 		if (gWindowHistograms)
 		{
